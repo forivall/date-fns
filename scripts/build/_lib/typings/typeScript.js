@@ -53,7 +53,31 @@ function getTypeScriptTypeAlias(type) {
 
   return formatBlock`
     type ${title} = ${
-    properties ? getParams(properties) : content.type.names.join(' | ')
+    title === 'ReadonlyDate'
+      ? formatBlock`
+          Readonly<
+            Omit<
+              Date,
+              | 'setTime'
+              | 'setMilliseconds'
+              | 'setUTCMilliseconds'
+              | 'setSeconds'
+              | 'setUTCSeconds'
+              | 'setMinutes'
+              | 'setUTCMinutes'
+              | 'setHours'
+              | 'setUTCHours'
+              | 'setDate'
+              | 'setUTCDate'
+              | 'setMonth'
+              | 'setUTCMonth'
+              | 'setFullYear'
+              | 'setUTCFullYear'
+            >
+          >`
+      : properties
+      ? getParams(properties)
+      : content.type.names.join(' | ')
   }
     type ${title}Aliased = ${title}
   `
@@ -140,7 +164,8 @@ function getTypeScriptFnDefinition(fn) {
 
   const params = getParams(args, { leftBorder: '(', rightBorder: ')' })
   const returns = getType(
-    content.returns && content.returns[0] && content.returns[0].type.names
+    content.returns && content.returns[0] && content.returns[0].type.names,
+    { isReturn: true }
   )
 
   return formatBlock`
@@ -292,6 +317,7 @@ function generateTypescriptConstantsTyping(constants) {
 function generateTypeScriptTypings(fns, aliases, locales, constants) {
   const nonFPFns = fns.filter((fn) => !fn.isFPFn)
   const fpFns = fns.filter((fn) => fn.isFPFn)
+  aliases = [...aliases, { title: 'ReadonlyDate' }]
   const constantsDefinitions = constants.map(
     (c) => `const ${c.name}: ${c.type.names.join(' | ')}`
   )

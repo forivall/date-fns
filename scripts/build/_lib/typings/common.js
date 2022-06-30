@@ -9,7 +9,10 @@ function correctTypeCase(type) {
   return type
 }
 
-function getParams(params, { leftBorder = '{', rightBorder = '}' } = {}) {
+function getParams(
+  params,
+  { leftBorder = '{', rightBorder = '}', flowType = false } = {}
+) {
   if (!params || params.length === 0) {
     return leftBorder + rightBorder
   }
@@ -23,7 +26,7 @@ function getParams(params, { leftBorder = '{', rightBorder = '}' } = {}) {
         variable,
         type: { names: typeNames },
       } = param
-      const type = getType(typeNames, { props, forceArray: variable })
+      const type = getType(typeNames, { props, forceArray: variable, flowType })
       return `${variable ? '...' : ''}${name}${optional ? '?' : ''}: ${type}`
     }),
     ','
@@ -38,7 +41,7 @@ function getParams(params, { leftBorder = '{', rightBorder = '}' } = {}) {
 
 function getType(
   types,
-  { props = [], forceArray = false, flowType = false } = {}
+  { props = [], forceArray = false, flowType = false, isReturn = false } = {}
 ) {
   if (!types) {
     return 'void'
@@ -65,7 +68,11 @@ function getType(
     }
 
     if (type === 'Object' && props.length > 0) {
-      return getParams(props)
+      return getParams(props, { flowType })
+    }
+
+    if (!flowType && type === 'Date' && !isReturn) {
+      return 'Date | ReadonlyDate'
     }
 
     const caseCorrectedType = correctTypeCase(type)

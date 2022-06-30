@@ -36,14 +36,20 @@ const getFlowFPTypeAliases = (arity = 4) =>
 function getFlowTypeAlias(type) {
   const { title, properties, content } = type
   return `export type ${title} = ${
-    properties ? getParams(properties) : content.type.names.join(' | ')
+    properties
+      ? getParams(properties, { flowType: true })
+      : content.type.names.join(' | ')
   }`
 }
 
 function generateFlowFnTyping(fn, aliasDeclarations) {
   const { title, args, content } = fn
 
-  const params = getParams(args, { leftBorder: '(', rightBorder: ')' })
+  const params = getParams(args, {
+    leftBorder: '(',
+    rightBorder: ')',
+    flowType: true,
+  })
   const returns = getType(
     content.returns && content.returns[0] && content.returns[0].type.names,
     { flowType: true }
@@ -62,7 +68,11 @@ function generateFlowFnTyping(fn, aliasDeclarations) {
 
 function generateFlowFnIndexTyping(fns, aliasDeclarations, constants) {
   const fnsDeclarations = fns.map(({ title, args, content }) => {
-    const params = getParams(args, { leftBorder: '(', rightBorder: ')' })
+    const params = getParams(args, {
+      leftBorder: '(',
+      rightBorder: ')',
+      flowType: true,
+    })
     const returns = getType(
       content.returns && content.returns[0] && content.returns[0].type.names,
       { flowType: true }
