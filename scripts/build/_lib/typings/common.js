@@ -11,7 +11,7 @@ function correctTypeCase(type) {
 
 function getParams(
   params,
-  { leftBorder = '{', rightBorder = '}', flowType = false } = {}
+  { leftBorder = '{', rightBorder = '}', flowType = false, aliasMap } = {}
 ) {
   if (!params || params.length === 0) {
     return leftBorder + rightBorder
@@ -26,7 +26,12 @@ function getParams(
         variable,
         type: { names: typeNames },
       } = param
-      const type = getType(typeNames, { props, forceArray: variable, flowType })
+      const type = getType(typeNames, {
+        props,
+        forceArray: variable,
+        flowType,
+        aliasMap,
+      })
       return `${variable ? '...' : ''}${name}${optional ? '?' : ''}: ${type}`
     }),
     ','
@@ -41,7 +46,13 @@ function getParams(
 
 function getType(
   types,
-  { props = [], forceArray = false, flowType = false, isReturn = false } = {}
+  {
+    props = [],
+    forceArray = false,
+    flowType = false,
+    isReturn = false,
+    aliasMap,
+  } = {}
 ) {
   if (!types) {
     return 'void'
@@ -68,11 +79,17 @@ function getType(
     }
 
     if (type === 'Object' && props.length > 0) {
-      return getParams(props, { flowType })
+      return getParams(props, { flowType, aliasMap })
     }
 
-    if (!flowType && type === 'Date' && !isReturn) {
-      return 'Date | ReadonlyDate'
+    if (!flowType && !isReturn) {
+      if (type === 'Date') {
+        return 'Date | ReadonlyDate'
+      }
+      const alias = aliasMap[type]
+      if (alias && alias.properties) {
+        return `Readonly<${type}>`
+      }
     }
 
     const caseCorrectedType = correctTypeCase(type)
@@ -96,17 +113,17 @@ function getType(
   return typeStrings.map((typeString) => `${prefix}${typeString}`).join(' | ')
 }
 
-function getFPFnType(params, returns, { flowType = false } = {}) {
+function getFPFnType(params, returns, { flowType = false, aliasMap } = {}) {
   if (params.length === 0) {
     return `() => ${getType(returns, { flowType })}`
   }
   const fpParamTypes = params.map((param) =>
-    getType(param.type.names, { props: param.props, flowType })
+    getType(param.type.names, { props: param.props, flowType, aliasMap })
   )
 
   const arity = fpParamTypes.length
 
-  fpParamTypes.push(getType(returns, { flowType }))
+  fpParamTypes.push(getType(returns, { flowType, aliasMap }))
 
   return `CurriedFn${arity}<${fpParamTypes.join(', ')}>`
 }

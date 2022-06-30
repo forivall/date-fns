@@ -51,34 +51,38 @@ const getTypeScriptFPInterfaces = (arity = 4) =>
 function getTypeScriptTypeAlias(type) {
   const { title, properties, content } = type
 
-  return formatBlock`
-    type ${title} = ${
-    title === 'ReadonlyDate'
-      ? formatBlock`
-          Readonly<
-            Omit<
-              Date,
-              | 'setTime'
-              | 'setMilliseconds'
-              | 'setUTCMilliseconds'
-              | 'setSeconds'
-              | 'setUTCSeconds'
-              | 'setMinutes'
-              | 'setUTCMinutes'
-              | 'setHours'
-              | 'setUTCHours'
-              | 'setDate'
-              | 'setUTCDate'
-              | 'setMonth'
-              | 'setUTCMonth'
-              | 'setFullYear'
-              | 'setUTCFullYear'
-            >
-          >`
-      : properties
-      ? getParams(properties)
-      : content.type.names.join(' | ')
+  /** @type {string} */
+  let typedef
+  if (title === 'ReadonlyDate') {
+    typedef = formatBlock`
+      Readonly<
+        Omit<
+          Date,
+          | 'setTime'
+          | 'setMilliseconds'
+          | 'setUTCMilliseconds'
+          | 'setSeconds'
+          | 'setUTCSeconds'
+          | 'setMinutes'
+          | 'setUTCMinutes'
+          | 'setHours'
+          | 'setUTCHours'
+          | 'setDate'
+          | 'setUTCDate'
+          | 'setMonth'
+          | 'setUTCMonth'
+          | 'setFullYear'
+          | 'setUTCFullYear'
+        >
+      >`
+  } else if (properties) {
+    typedef = getParams(properties, { aliasMap: {} })
+  } else {
+    typedef = content.type.names.join(' | ')
   }
+
+  return formatBlock`
+    type ${title} = ${typedef}
     type ${title}Aliased = ${title}
   `
 }
@@ -102,14 +106,17 @@ function getExportedTypeScriptTypeAliases(aliases) {
 function getTypeScriptDateFnsModuleDefinition(
   submodule,
   fns,
-  constantsDefinitions
+  constantsDefinitions,
+  context
 ) {
   const moduleName = `date-fns${submodule}`
 
   const definition = formatBlock`
     declare module '${moduleName}' {
       ${addSeparator(
-        fns.map(getTypeScriptFnDefinition).concat(constantsDefinitions),
+        fns
+          .map(getTypeScriptFnDefinition.bind(null, context))
+          .concat(constantsDefinitions),
         '\n'
       )}
     }
@@ -124,11 +131,12 @@ function getTypeScriptDateFnsModuleDefinition(
 function getTypeScriptDateFnsFPModuleDefinition(
   submodule,
   fns,
-  constantsDefinitions
+  constantsDefinitions,
+  context
 ) {
   const moduleName = `date-fns${submodule}/fp`
 
-  const fnDefinitions = fns.map(getTypeScriptFPFnDefinition)
+  const fnDefinitions = fns.map(getTypeScriptFPFnDefinition.bind(null, context))
 
   const definition = formatBlock`
     declare module '${moduleName}' {
@@ -159,13 +167,18 @@ function getTypeScriptFnModuleDefinition(submodule, fnSuffix, fn) {
   }
 }
 
-function getTypeScriptFnDefinition(fn) {
+function getTypeScriptFnDefinition(context, fn) {
+  const { aliasMap } = context
   const { title, args, content } = fn
 
-  const params = getParams(args, { leftBorder: '(', rightBorder: ')' })
+  const params = getParams(args, {
+    leftBorder: '(',
+    rightBorder: ')',
+    aliasMap,
+  })
   const returns = getType(
     content.returns && content.returns[0] && content.returns[0].type.names,
-    { isReturn: true }
+    { isReturn: true, aliasMap }
   )
 
   return formatBlock`
@@ -174,12 +187,14 @@ function getTypeScriptFnDefinition(fn) {
   `
 }
 
-function getTypeScriptFPFnDefinition(fn) {
+function getTypeScriptFPFnDefinition(context, fn) {
+  const { aliasMap } = context
   const { title, args, content } = fn
 
   const type = getFPFnType(
     args,
-    content.returns && content.returns[0] && content.returns[0].type.names
+    content.returns && content.returns[0] && content.returns[0].type.names,
+    { aliasMap }
   )
 
   return formatBlock`
@@ -273,9 +288,14 @@ function getTypeScriptLocaleModuleDefinition(
 
 function getTypeScriptInterfaceDefinition(fn) {
   const { title, args, content } = fn
-  const params = getParams(args, { leftBorder: '(', rightBorder: ')' })
+  const params = getParams(args, {
+    leftBorder: '(',
+    rightBorder: ')',
+    aliasMap: {},
+  })
   const returns = getType(
-    content.returns && content.returns[0] && content.returns[0].type.names
+    content.returns && content.returns[0] && content.returns[0].type.names,
+    { aliasMap: {} }
   )
 
   return `${title}${params}: ${returns}`
@@ -317,13 +337,23 @@ function generateTypescriptConstantsTyping(constants) {
 function generateTypeScriptTypings(fns, aliases, locales, constants) {
   const nonFPFns = fns.filter((fn) => !fn.isFPFn)
   const fpFns = fns.filter((fn) => fn.isFPFn)
+  const aliasMap = aliases.reduce((map, alias) => {
+    map[alias.title] = alias
+    return map
+  }, {})
   aliases = [...aliases, { title: 'ReadonlyDate' }]
   const constantsDefinitions = constants.map(
     (c) => `const ${c.name}: ${c.type.names.join(' | ')}`
   )
+  const context = { aliasMap }
 
   const moduleDefinitions = [
-    getTypeScriptDateFnsModuleDefinition('', nonFPFns, constantsDefinitions),
+    getTypeScriptDateFnsModuleDefinition(
+      '',
+      nonFPFns,
+      constantsDefinitions,
+      context
+    ),
     getTypeScriptConstantsModuleDefinition(constants, ''),
     getTypeScriptConstantsModuleDefinition(constants, '/index'),
     getTypeScriptConstantsModuleDefinition(constants, '/index.js'),
@@ -338,7 +368,12 @@ function generateTypeScriptTypings(fns, aliases, locales, constants) {
     .map((module) => module.definition)
 
   const fpModuleDefinitions = [
-    getTypeScriptDateFnsFPModuleDefinition('', fpFns, constantsDefinitions),
+    getTypeScriptDateFnsFPModuleDefinition(
+      '',
+      fpFns,
+      constantsDefinitions,
+      context
+    ),
   ]
     .concat(
       fpFns.map(getTypeScriptFPFnModuleDefinition.bind(null, '', '', false))
@@ -359,7 +394,8 @@ function generateTypeScriptTypings(fns, aliases, locales, constants) {
     getTypeScriptDateFnsModuleDefinition(
       '/esm',
       nonFPFns,
-      constantsDefinitions
+      constantsDefinitions,
+      context
     ),
   ]
     .concat(
@@ -376,7 +412,12 @@ function generateTypeScriptTypings(fns, aliases, locales, constants) {
     .map((module) => module.definition)
 
   const esmFPModuleDefinitions = [
-    getTypeScriptDateFnsFPModuleDefinition('/esm', fpFns, constantsDefinitions),
+    getTypeScriptDateFnsFPModuleDefinition(
+      '/esm',
+      fpFns,
+      constantsDefinitions,
+      context
+    ),
   ]
     .concat(
       fpFns.map(getTypeScriptFPFnModuleDefinition.bind(null, '/esm', '', true))
