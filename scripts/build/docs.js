@@ -19,12 +19,23 @@ const docsConfig = require('../../docs/index.js')
 
 const docsPath = path.resolve(process.cwd(), 'tmp/docs.json')
 
-generateDocsFromSource()
-  .then(generatedDocsObj)
-  .then(injectStaticDocsToDocsObj)
-  .then(injectSharedDocsToDocsObj)
-  .then(writeDocsFile)
-  .catch(reportErrors)
+main()
+function main() {
+  switch (process.argv[2]) {
+    case 'generateDocsFromSource':
+      return generateDocsFromSource().then(printResult).catch(reportErrors)
+    case 'getListOfStaticDocs':
+      return getListOfStaticDocs().then(printResult).catch(reportErrors)
+    case 'generateSharedDocs':
+      return generateSharedDocs().then(printResult).catch(reportErrors)
+  }
+  generateDocsFromSource()
+    .then(generatedDocsObj)
+    .then(injectStaticDocsToDocsObj)
+    .then(injectSharedDocsToDocsObj)
+    .then(writeDocsFile)
+    .catch(reportErrors)
+}
 
 /**
  * Generates docs object from a list of functions using extended JSDoc format.
@@ -377,4 +388,19 @@ function generateSyntaxString(name, args, isFPFn) {
       .join(', ')
     return `${name}(${argsString})`
   }
+}
+
+function printResult(value) {
+  if (process.argv[3] === '--json') {
+    console.log(JSON.stringify(value, null, 2))
+    return
+  }
+  const util = require('util')
+  console.log(
+    util.inspect(value, {
+      depth: null,
+      maxArrayLength: null,
+      colors: true,
+    })
+  )
 }

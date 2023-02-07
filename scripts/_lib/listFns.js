@@ -30,3 +30,20 @@ async function listFns() {
       })
   )
 }
+
+if (require.main === module) {
+  listFns().then(
+    (fns) => {
+      console.log(
+        require('util').inspect(fns, {
+          depth: null,
+          maxArrayLength: null,
+          colors: true,
+        })
+      )
+    },
+    (err) => {
+      throw err
+    }
+  )
+}
